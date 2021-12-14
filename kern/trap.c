@@ -19,7 +19,7 @@ void __page_fault_handler_with_buffering(struct Env * curenv, uint32 fault_va);
 void page_fault_handler(struct Env * curenv, uint32 fault_va);
 void page_fault_handler_old(struct Env * curenv, uint32 fault_va);
 void table_fault_handler(struct Env * curenv, uint32 fault_va);
-
+void placement_(struct Env * curenv, uint32 fault_va,int found);
 static struct Taskstate ts;
 
 //2014 Test Free(): Set it to bypass the PAGE FAULT on an instruction with this length and continue executing the next one
@@ -480,16 +480,76 @@ void page_fault_handler(struct Env * curenv, uint32 fault_va)
 {
 	//TODO: [PROJECT 2021 - [1] PAGE FAULT HANDLER]
 	// Write your code here, remove the panic and write your code
-	panic("page_fault_handler() is not implemented yet...!!");
+	//panic("page_fault_handler() is not implemented yet...!!");
+	int maxSize = curenv->page_WS_max_size ;
+	int sizeOfActive = curenv->ActiveListSize;
+	int sizeOfSecond = curenv->SecondListSize;
+	struct WorkingSetElement * e;
+	struct WorkingSetElement * elm = LIST_LAST(&(curenv->ActiveList));
 
-	//refer to the project presentation and documentation for details
+				LIST_FOREACH(e, &(curenv->SecondList))
+				{
+					if(e->virtual_address==fault_va)
+					{
+						 LIST_REMOVE(&(curenv->SecondList),e);
+						 LIST_REMOVE(&(curenv->ActiveList),elm);
+						 LIST_INSERT_HEAD(&(curenv->SecondList),elm);
+						 LIST_INSERT_HEAD(&(curenv->ActiveList),e);
+						pt_set_page_permissions(curenv,e->virtual_address,PERM_PRESENT,0);
+						pt_set_page_permissions(curenv,elm->virtual_address,0,PERM_PRESENT);
 
+                         return ;
+					}
+				}
+	if(sizeOfActive> LIST_SIZE(&(curenv->ActiveList)))
+	{
+		placement_(curenv,fault_va,0);
+	}
+
+	else
+	{
+       if(sizeOfSecond > LIST_SIZE(&(curenv->SecondList)))
+       {
+    	   LIST_REMOVE(&(curenv->ActiveList),elm);
+    	  pt_set_page_permissions(curenv,elm->virtual_address,0,PERM_PRESENT);
+    	   LIST_INSERT_HEAD(&(curenv->SecondList),elm);
+    	   placement_(curenv,fault_va,0);
+       }
+
+	}
 	//TODO: [PROJECT 2021 - BONUS3] O(1) Implementation of Fault Handler
 
 	//TODO: [PROJECT 2021 - BONUS4] Change WS Size according to “Program Priority”
 
 }
+void placement_(struct Env * curenv, uint32 fault_va,int found)
+{
 
+	 struct Frame_Info *frame_info_ptr =NULL ;
+				int r = allocate_frame(&frame_info_ptr);
+				if(r!=E_NO_MEM)
+				{
+					if(found == 0){
+				  map_frame(curenv->env_page_directory ,frame_info_ptr ,(void*)fault_va,PERM_PRESENT | PERM_USER | PERM_WRITEABLE);}
+				  r = pf_read_env_page(curenv,(void *)fault_va);
+				  if (r == E_PAGE_NOT_EXIST_IN_PF)
+				  {
+					  // CHECK if it is a stack page
+					  if (fault_va < USTACKTOP && fault_va >= USTACKBOTTOM)
+					  {
+						  pf_add_empty_env_page(curenv,fault_va,0);
+					  }
+					  else
+						  panic("invalid access");
+				  }
+
+				  struct WorkingSetElement * elm = LIST_LAST(&(curenv->PageWorkingSetList));
+				  LIST_REMOVE(&(curenv->PageWorkingSetList),elm);
+				  LIST_INSERT_HEAD(&(curenv->ActiveList),elm);
+				  elm->virtual_address = fault_va;
+				}
+
+}
 
 void __page_fault_handler_with_buffering(struct Env * curenv, uint32 fault_va)
 {
