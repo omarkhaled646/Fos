@@ -15,18 +15,72 @@
 //==================================================================================//
 //============================ REQUIRED FUNCTIONS ==================================//
 //==================================================================================//
+struct Block
+{
+	uint32 startAddress, endAddress;
+	struct Block *ptrNext, *ptrPrev;
+};
+
+struct Block head = {USER_HEAP_START, USER_HEAP_MAX, NULL, NULL};
+struct Block *freeBlockListHead = &head;
+
 void* malloc(uint32 size)
 {
 	//TODO: [PROJECT 2021 - [2] User Heap] malloc() [User Side]
 	// Write your code here, remove the panic and write your code
-	panic("malloc() is not implemented yet...!!");
+	// panic("malloc() is not implemented yet...!!");
 
 	//This function should find the space of the required range
 	//using the BEST FIT strategy
 
 	//refer to the project presentation and documentation for details
 
-	return NULL;
+	uint32 minSize = USER_HEAP_MAX - USER_HEAP_START + 5;
+	struct Block *bestFitBlock = NULL;
+	struct Block *block = freeBlockListHead;
+
+	while (block != NULL)
+	{
+		uint32 blockSize = block->endAddress - block->startAddress + 1;
+		if (blockSize >= size && blockSize < minSize)
+		{
+			minSize = blockSize;
+			bestFitBlock = block;
+		}
+		block = block->ptrNext;
+	}
+
+	if (bestFitBlock == NULL)
+		return NULL;
+
+	sys_allocateMem(bestFitBlock->startAddress, size);
+	uint32 bestFitBlockSize = bestFitBlock->endAddress - bestFitBlock->startAddress + 1;
+	uint32 retAddress = bestFitBlock->startAddress;
+	uint32 numOfPages = (size + 4095) / 4096;
+	uint32 pagesSize = numOfPages * PAGE_SIZE;
+
+	if (bestFitBlockSize == size)
+	{
+		if (bestFitBlock->ptrNext != NULL)
+		{
+			bestFitBlock->ptrNext->ptrPrev = bestFitBlock->ptrPrev;
+		}
+
+		if (bestFitBlock->ptrPrev != NULL)
+		{
+			bestFitBlock->ptrPrev->ptrNext = bestFitBlock->ptrNext;
+		}
+		else
+		{
+			freeBlockListHead = bestFitBlock->ptrNext;
+		}
+	}
+	else
+	{
+		bestFitBlock->startAddress += pagesSize;
+	}
+
+	return (void*) retAddress;
 }
 
 // free():

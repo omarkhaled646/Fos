@@ -768,10 +768,20 @@ void allocateMem(struct Env* e, uint32 virtual_address, uint32 size)
 {
 	//TODO: [PROJECT 2021 - [2] User Heap] allocateMem() [Kernel Side]
 	// Write your code here, remove the panic and write your code
-	panic("allocateMem() is not implemented yet...!!");
+	// panic("allocateMem() is not implemented yet...!!");
 
 	//This function should allocate ALL pages of the required range in the PAGE FILE
 	//and allocate NOTHING in the main memory
+
+	int numberOfPages = (size + 4095) / 4096;
+	uint32 curAddress = virtual_address;
+
+	for (int i = 0; i < numberOfPages; i++)
+	{
+		pf_add_empty_env_page(e, curAddress, 0);
+		curAddress += PAGE_SIZE;
+	}
+
 }
 
 
