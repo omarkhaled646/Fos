@@ -585,7 +585,6 @@ int map_frame(uint32 *ptr_page_directory, struct Frame_Info *ptr_frame_info, voi
 		//// create the table in memory for us ...
 		//char dummy_char = *((char*)virtual_address) ;
 		//// a page fault is created now and page_fault_handler() should start handling the fault ...
-
 		//// now the page_fault_handler() should have returned successfully and updated the
 		//// directory with the new table frame number in memory
 		//uint32 page_directory_entry;
@@ -619,7 +618,6 @@ int map_frame(uint32 *ptr_page_directory, struct Frame_Info *ptr_frame_info, voi
 		}
 		ptr_frame_info->references++;
 		ptr_page_table[PTX(virtual_address)] = CONSTRUCT_ENTRY(physical_address , perm | PERM_PRESENT);
-
 	}*/
 
 	/*NEW'15 CORRECT SOLUTION*/
@@ -768,23 +766,20 @@ void allocateMem(struct Env* e, uint32 virtual_address, uint32 size)
 {
 	//TODO: [PROJECT 2021 - [2] User Heap] allocateMem() [Kernel Side]
 	// Write your code here, remove the panic and write your code
-
-	int numOfPages = size / PAGE_SIZE ;
-	int ret = 0 ;
-	for(int i =0 ;i<numOfPages ; i++){
-		ret =pf_add_empty_env_page(e , virtual_address ,0 );
-
-		if(ret == E_NO_PAGE_FILE_SPACE){
-			panic("no page file space \n\n");
-		}
-		virtual_address += PAGE_SIZE  ;
-	}
-
-
-
+	// panic("allocateMem() is not implemented yet...!!");
 
 	//This function should allocate ALL pages of the required range in the PAGE FILE
 	//and allocate NOTHING in the main memory
+
+	int numberOfPages = (size + 4095) / 4096;
+	uint32 curAddress = virtual_address;
+
+	for (int i = 0; i < numberOfPages; i++)
+	{
+		pf_add_empty_env_page(e, curAddress, 0);
+		curAddress += PAGE_SIZE;
+	}
+
 }
 
 
@@ -795,71 +790,12 @@ void freeMem(struct Env* e, uint32 virtual_address, uint32 size)
 
 	//TODO: [PROJECT 2021 - [2] User Heap] freeMem() [Kernel Side]
 	// Write your code here, remove the panic and write your code
+	panic("freeMem() is not implemented yet...!!");
 
 	//This function should:
 	//1. Free ALL pages of the given range from the Page File
-	uint32 va = virtual_address ;
-	uint32 va2 = virtual_address ;
-	uint32 va3 = virtual_address ;
-
-	int numOfPages = size / PAGE_SIZE ;
-
-		int ret = 0 ;
-		for(int i =0 ;i<numOfPages ; i++){
-			pf_remove_env_page(e,virtual_address);
-
-			virtual_address += PAGE_SIZE  ;
-		}
-
 	//2. Free ONLY pages that are resident in the working set from the memory
-		struct Frame_Info * ptr_frame ;
-		uint32 *ptr_page_table ;
-		int count=0;
-		for(int i=0 ; i<numOfPages ; i++)
-		{
-			struct WorkingSetElement *element;
-			LIST_FOREACH(element, &(e->PageWorkingSetList))
-			{
-			    if(va3 == element->virtual_address){
-			    	ptr_frame = get_frame_info(e->env_page_directory ,(void*)va3,&ptr_page_table);
-
-			    	if(ptr_frame !=NULL){
-			    		unmap_frame(e->env_page_directory,(void*)va3);
-			    		env_page_ws_clear_entry(e,count);
-			    	}
-
-			    }
-			    count++;
-			}
-			count=0;
-			va3+= PAGE_SIZE ;
-		}
-
-
 	//3. Removes ONLY the empty page tables (i.e. not used) (no pages are mapped in the table)
-
-
-
-	for(int i =0 ; i<numOfPages ; i++ ){
-
-		 ptr_page_table = NULL ;
-		 get_page_table(e->env_page_directory ,(void*)va2 ,&ptr_page_table);
-		 if(ptr_page_table != NULL){
-			 int counter=0 ;
-			 for(int j =0 ; j< 1024 ; j++){
-				 if(ptr_page_table[j] == 0){
-					 counter++ ;
-				 }
-			 }
-			 if(counter == 1024 ){
-				 kfree((void*) ptr_page_table);
-				 pd_clear_page_dir_entry(e,va2);
-			 }
-		 }
-		va2 += PAGE_SIZE ;
-	}
-	//tlbflush();
-
 }
 
 void __freeMem_with_buffering(struct Env* e, uint32 virtual_address, uint32 size)
@@ -930,8 +866,6 @@ struct freeFramesCounters calculate_available_frames()
 	//================================
 	/*	struct  Frame_Info * slowPtr = LIST_FIRST(&free_frame_list);
 	struct  Frame_Info * fastPtr = LIST_FIRST(&free_frame_list);
-
-
 	while (slowPtr && fastPtr) {
 		fastPtr = LIST_NEXT(fastPtr); // advance the fast pointer
 		if (fastPtr == slowPtr) // and check if its equal to the slow pointer
@@ -939,17 +873,14 @@ struct freeFramesCounters calculate_available_frames()
 			cprintf("loop detected in freelist\n");
 			break;
 		}
-
 		if (fastPtr == NULL) {
 			break; // since fastPtr is NULL we reached the tail
 		}
-
 		fastPtr = LIST_NEXT(fastPtr); //advance and check again
 		if (fastPtr == slowPtr) {
 			cprintf("loop detected in freelist\n");
 			break;
 		}
-
 		slowPtr = LIST_NEXT(slowPtr); // advance the slow pointer only once
 	}
 	cprintf("finished loop detction\n");
@@ -1433,6 +1364,3 @@ uint32 isKHeapPlacementStrategyFIRSTFIT(){if(_KHeapPlacementStrategy == KHP_PLAC
 uint32 isKHeapPlacementStrategyBESTFIT(){if(_KHeapPlacementStrategy == KHP_PLACE_BESTFIT) return 1; return 0;}
 uint32 isKHeapPlacementStrategyNEXTFIT(){if(_KHeapPlacementStrategy == KHP_PLACE_NEXTFIT) return 1; return 0;}
 uint32 isKHeapPlacementStrategyWORSTFIT(){if(_KHeapPlacementStrategy == KHP_PLACE_WORSTFIT) return 1; return 0;}
-
-
-
