@@ -768,7 +768,20 @@ void allocateMem(struct Env* e, uint32 virtual_address, uint32 size)
 {
 	//TODO: [PROJECT 2021 - [2] User Heap] allocateMem() [Kernel Side]
 	// Write your code here, remove the panic and write your code
-	panic("allocateMem() is not implemented yet...!!");
+
+	int numOfPages = size / PAGE_SIZE ;
+	int ret = 0 ;
+	for(int i =0 ;i<numOfPages ; i++){
+		ret =pf_add_empty_env_page(e , virtual_address ,0 );
+
+		if(ret == E_NO_PAGE_FILE_SPACE){
+			panic("no page file space \n\n");
+		}
+		virtual_address += PAGE_SIZE  ;
+	}
+
+
+
 
 	//This function should allocate ALL pages of the required range in the PAGE FILE
 	//and allocate NOTHING in the main memory
@@ -782,12 +795,71 @@ void freeMem(struct Env* e, uint32 virtual_address, uint32 size)
 
 	//TODO: [PROJECT 2021 - [2] User Heap] freeMem() [Kernel Side]
 	// Write your code here, remove the panic and write your code
-	panic("freeMem() is not implemented yet...!!");
 
 	//This function should:
 	//1. Free ALL pages of the given range from the Page File
+	uint32 va = virtual_address ;
+	uint32 va2 = virtual_address ;
+	uint32 va3 = virtual_address ;
+
+	int numOfPages = size / PAGE_SIZE ;
+
+		int ret = 0 ;
+		for(int i =0 ;i<numOfPages ; i++){
+			pf_remove_env_page(e,virtual_address);
+
+			virtual_address += PAGE_SIZE  ;
+		}
+
 	//2. Free ONLY pages that are resident in the working set from the memory
+		struct Frame_Info * ptr_frame ;
+		uint32 *ptr_page_table ;
+		int count=0;
+		for(int i=0 ; i<numOfPages ; i++)
+		{
+			struct WorkingSetElement *element;
+			LIST_FOREACH(element, &(e->PageWorkingSetList))
+			{
+			    if(va3 == element->virtual_address){
+			    	ptr_frame = get_frame_info(e->env_page_directory ,(void*)va3,&ptr_page_table);
+
+			    	if(ptr_frame !=NULL){
+			    		unmap_frame(e->env_page_directory,(void*)va3);
+			    		env_page_ws_clear_entry(e,count);
+			    	}
+
+			    }
+			    count++;
+			}
+			count=0;
+			va3+= PAGE_SIZE ;
+		}
+
+
 	//3. Removes ONLY the empty page tables (i.e. not used) (no pages are mapped in the table)
+
+
+
+	for(int i =0 ; i<numOfPages ; i++ ){
+
+		 ptr_page_table = NULL ;
+		 get_page_table(e->env_page_directory ,(void*)va2 ,&ptr_page_table);
+		 if(ptr_page_table != NULL){
+			 int counter=0 ;
+			 for(int j =0 ; j< 1024 ; j++){
+				 if(ptr_page_table[j] == 0){
+					 counter++ ;
+				 }
+			 }
+			 if(counter == 1024 ){
+				 kfree((void*) ptr_page_table);
+				 pd_clear_page_dir_entry(e,va2);
+			 }
+		 }
+		va2 += PAGE_SIZE ;
+	}
+	//tlbflush();
+
 }
 
 void __freeMem_with_buffering(struct Env* e, uint32 virtual_address, uint32 size)

@@ -476,8 +476,10 @@ void table_fault_handler(struct Env * curenv, uint32 fault_va)
 
 //Handle the page fault
 
+
 void page_fault_handler(struct Env * curenv, uint32 fault_va)
 {
+
 	//TODO: [PROJECT 2021 - [1] PAGE FAULT HANDLER]
 	// Write your code here, remove the panic and write your code
 	//panic("page_fault_handler() is not implemented yet...!!");
@@ -495,35 +497,17 @@ void page_fault_handler(struct Env * curenv, uint32 fault_va)
 					{
 
 						 LIST_REMOVE(&(curenv->SecondList),e);
+						pt_set_page_permissions(curenv,e->virtual_address,PERM_PRESENT|PERM_WRITEABLE|PERM_USER,0);
 						 LIST_REMOVE(&(curenv->ActiveList),elm);
-						 LIST_INSERT_HEAD(&(curenv->SecondList),elm);
+						pt_set_page_permissions(curenv,elm->virtual_address,0,PERM_PRESENT|PERM_WRITEABLE|PERM_USER);
 						 LIST_INSERT_HEAD(&(curenv->ActiveList),e);
-						pt_set_page_permissions(curenv,e->virtual_address,PERM_PRESENT|PERM_WRITEABLE,0);
-						pt_set_page_permissions(curenv,elm->virtual_address,0,PERM_PRESENT|PERM_WRITEABLE);
+						 LIST_INSERT_HEAD(&(curenv->SecondList),elm);
 
                          return ;
 					}
 				}
 
-	if(sizeOfSecond == LIST_SIZE(&(curenv->SecondList))){
 
-		struct WorkingSetElement * victim = LIST_LAST(&(curenv->SecondList));
-		    	   uint32 perm = pt_get_page_permissions(curenv,victim->virtual_address);
-		    	   if(perm&PERM_MODIFIED)
-		    	   {
-		    		uint32 * pagetable;
-		    		struct Frame_Info * f = get_frame_info(curenv->env_page_directory,(void *)victim->virtual_address,&pagetable);
-		    		pf_update_env_page(curenv,(void *)victim->virtual_address,f);
-		    	   }
-		    	   LIST_REMOVE(&(curenv->SecondList),victim);
-		    	   pt_set_page_permissions(curenv,victim->virtual_address,0,PERM_PRESENT|PERM_WRITEABLE|PERM_USER|PERM_MODIFIED);
-		    	   unmap_frame(curenv->env_page_directory,(void *)victim->virtual_address);
-		    	   LIST_REMOVE(&(curenv->ActiveList),elm);
-		    	   pt_set_page_permissions(curenv,elm->virtual_address,0,PERM_PRESENT|PERM_WRITEABLE);
-		    	   LIST_INSERT_HEAD(&(curenv->SecondList),elm);
-		    	   LIST_INSERT_HEAD(&(curenv->PageWorkingSetList),victim);
-		    	   placement_(curenv,fault_va);
-	}
 	if(sizeOfActive> LIST_SIZE(&(curenv->ActiveList)))
 	{
 		placement_(curenv,fault_va);
@@ -536,9 +520,28 @@ void page_fault_handler(struct Env * curenv, uint32 fault_va)
        if(sizeOfSecond > LIST_SIZE(&(curenv->SecondList)))
        {
     	   LIST_REMOVE(&(curenv->ActiveList),elm);
-    	  pt_set_page_permissions(curenv,elm->virtual_address,0,PERM_PRESENT|PERM_WRITEABLE);
+    	  pt_set_page_permissions(curenv,elm->virtual_address,0,PERM_PRESENT|PERM_WRITEABLE|PERM_USER);
     	   LIST_INSERT_HEAD(&(curenv->SecondList),elm);
     	   placement_(curenv,fault_va);
+       }
+       else
+       {
+    		struct WorkingSetElement * victim = LIST_LAST(&(curenv->SecondList));
+    			    	   uint32 perm = pt_get_page_permissions(curenv,victim->virtual_address);
+    			    	   if(perm&PERM_MODIFIED)
+    			    	   {
+    			    		uint32 * pagetable;
+    			    		struct Frame_Info * f = get_frame_info(curenv->env_page_directory,(void *)victim->virtual_address,&pagetable);
+    			    		pf_update_env_page(curenv,(void *)victim->virtual_address,f);
+    			    	   }
+    			    	   LIST_REMOVE(&(curenv->SecondList),victim);
+    			    	   pt_set_page_permissions(curenv,victim->virtual_address,0,PERM_PRESENT|PERM_WRITEABLE|PERM_USER|PERM_MODIFIED);
+    			    	   unmap_frame(curenv->env_page_directory,(void *)victim->virtual_address);
+    			    	   LIST_REMOVE(&(curenv->ActiveList),elm);
+    			    	   pt_set_page_permissions(curenv,elm->virtual_address,0,PERM_PRESENT|PERM_WRITEABLE|PERM_USER);
+    			    	   LIST_INSERT_HEAD(&(curenv->SecondList),elm);
+    			    	   LIST_INSERT_HEAD(&(curenv->PageWorkingSetList),victim);
+    			    	   placement_(curenv,fault_va);
        }
 
 
@@ -555,9 +558,9 @@ void placement_(struct Env * curenv, uint32 fault_va)
 				int r = allocate_frame(&frame_info_ptr);
 				if(r!=E_NO_MEM)
 				{
-
-				  map_frame(curenv->env_page_directory ,frame_info_ptr ,(void*)fault_va,PERM_PRESENT | PERM_USER | PERM_WRITEABLE);}
-				  r = pf_read_env_page(curenv,(void *)fault_va);
+                   map_frame(curenv->env_page_directory ,frame_info_ptr ,(void*)fault_va,PERM_PRESENT | PERM_USER | PERM_WRITEABLE);
+				}
+				 r = pf_read_env_page(curenv,(void *)fault_va);
 				  if (r == E_PAGE_NOT_EXIST_IN_PF)
 				  {
 					  // CHECK if it is a stack page
@@ -565,15 +568,18 @@ void placement_(struct Env * curenv, uint32 fault_va)
 					  {
 						  pf_add_empty_env_page(curenv,fault_va,0);
 					  }
-					  else
+					  else{
 						  panic("invalid access");
-				  }
+					  }
 
+
+
+				  }
 				  struct WorkingSetElement * elm = LIST_LAST(&(curenv->PageWorkingSetList));
 				  elm->virtual_address = fault_va;
 				  LIST_REMOVE(&(curenv->PageWorkingSetList),elm);
+				  pt_set_page_permissions(curenv,elm->virtual_address,PERM_PRESENT|PERM_WRITEABLE|PERM_USER,0);
 				  LIST_INSERT_HEAD(&(curenv->ActiveList),elm);
-				  pt_set_page_permissions(curenv,elm->virtual_address,PERM_PRESENT|PERM_WRITEABLE,0);
 
 }
 
