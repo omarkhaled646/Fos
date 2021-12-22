@@ -516,16 +516,33 @@ void page_fault_handler(struct Env * curenv, uint32 fault_va)
 
 	else
 	{
-
-       if(sizeOfSecond > LIST_SIZE(&(curenv->SecondList)))
+       if(sizeOfSecond==0)
+       {
+    	  struct WorkingSetElement * victim = LIST_LAST(&(curenv->ActiveList));
+    	  uint32 perm = pt_get_page_permissions(curenv,victim->virtual_address);
+    	      			   if(perm&PERM_MODIFIED)
+    	      			   	   {
+    	      			   		uint32 * pagetable;
+    	      			   		struct Frame_Info * f = get_frame_info(curenv->env_page_directory,(void *)victim->virtual_address,&pagetable);
+    	      		    		pf_update_env_page(curenv,(void *)victim->virtual_address,f);
+    	      		    	   }
+    	   LIST_REMOVE(&(curenv->ActiveList),victim);
+    	   pt_set_page_permissions(curenv,victim->virtual_address,0,PERM_PRESENT|PERM_WRITEABLE|PERM_USER|PERM_MODIFIED);
+    	   unmap_frame(curenv->env_page_directory,(void *)victim->virtual_address);
+    	   LIST_INSERT_HEAD(&(curenv->PageWorkingSetList),victim);
+    	   placement_(curenv,fault_va);
+       }
+       else if(sizeOfSecond > LIST_SIZE(&(curenv->SecondList)))
        {
     	   LIST_REMOVE(&(curenv->ActiveList),elm);
     	  pt_set_page_permissions(curenv,elm->virtual_address,0,PERM_PRESENT|PERM_WRITEABLE|PERM_USER);
     	   LIST_INSERT_HEAD(&(curenv->SecondList),elm);
     	   placement_(curenv,fault_va);
+
        }
        else
        {
+
     		struct WorkingSetElement * victim = LIST_LAST(&(curenv->SecondList));
     			    	   uint32 perm = pt_get_page_permissions(curenv,victim->virtual_address);
     			    	   if(perm&PERM_MODIFIED)
