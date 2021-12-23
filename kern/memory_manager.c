@@ -790,12 +790,78 @@ void freeMem(struct Env* e, uint32 virtual_address, uint32 size)
 
 	//TODO: [PROJECT 2021 - [2] User Heap] freeMem() [Kernel Side]
 	// Write your code here, remove the panic and write your code
-	panic("freeMem() is not implemented yet...!!");
+	//panic("freeMem() is not implemented yet...!!");
 
 	//This function should:
 	//1. Free ALL pages of the given range from the Page File
 	//2. Free ONLY pages that are resident in the working set from the memory
+
+	int numberOfPages = (size + 4095) / 4096;
+	uint32 curAddress = virtual_address;
+
+	for (int i = 0; i < numberOfPages; i++)
+	{
+		pf_remove_env_page(e, curAddress);
+		curAddress += PAGE_SIZE;
+	}
+
+	curAddress = virtual_address;
+
+	//2. Free ONLY pages that are resident in the working set from the memory
+
+	struct WorkingSetElement *element;
+//	uint32 entryIndex = 0;
+//	uint32 *ptrPageTable;
+
+	LIST_FOREACH (element, &(e->ActiveList))
+	{
+		if (curAddress == element->virtual_address)
+		{
+			LIST_REMOVE(&(e->ActiveList), element);
+			LIST_INSERT_TAIL(&(e->PageWorkingSetList), element);
+			unmap_frame(e->env_page_directory, (void*)curAddress);
+			element = LIST_FIRST(&(e->SecondList));
+			LIST_INSERT_TAIL(&(e->ActiveList), element);
+			pt_set_page_permissions(e, curAddress, PERM_PRESENT|PERM_WRITEABLE|PERM_USER, 0);
+		}
+	}
+
+	LIST_FOREACH (element, &(curenv->SecondList))
+	{
+		if (element->virtual_address == curAddress)
+		{
+			LIST_REMOVE(&(e->SecondList), element);
+			LIST_INSERT_TAIL(&(e->PageWorkingSetList), element);
+			unmap_frame((curenv->env_page_directory), (void*)curAddress);
+		}
+	}
+
 	//3. Removes ONLY the empty page tables (i.e. not used) (no pages are mapped in the table)
+
+	for (int i = 0; i < numberOfPages; i++)
+	{
+		uint32* ptrPageTable;
+		get_page_table(e->env_page_directory, (void*)curAddress, &ptrPageTable);
+		if (ptrPageTable != NULL)
+		{
+			uint32 isEmpty = 1;
+			for (int j = 0; j < 1024; j++)
+			{
+				if ((ptrPageTable[j] != 0))
+				{
+					isEmpty = 0;
+					break;
+				}
+			}
+			if (isEmpty)
+			{
+
+				pd_clear_page_dir_entry(e, (uint32)curAddress);
+			}
+		}
+		curAddress += PAGE_SIZE;
+	}
+
 }
 
 void __freeMem_with_buffering(struct Env* e, uint32 virtual_address, uint32 size)

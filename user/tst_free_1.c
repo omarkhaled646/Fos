@@ -155,11 +155,17 @@ void _main(void)
 		if ((sys_pf_calculate_allocated_pages() - usedDiskPages) != 3*Mega/4096) panic("Extra or less pages are allocated in PageFile");
 		//if ((freeFrames - sys_calculate_free_frames()) != 0) panic("Wrong allocation: ");
 		byteArr3 = (char*)ptr_allocations[5];
+
+	//	cprintf("50 % \n");
+
 		for(int i = 0; i < toAccess; i++)
 		{
+	//		cprintf("70 % \n");
 			*byteArr3 = '@';
 			byteArr3 += PAGE_SIZE;
 		}
+
+	//	cprintf("90 % \n");
 		//6 MB
 		usedDiskPages = sys_pf_calculate_allocated_pages() ;
 		ptr_allocations[6] = malloc(6*Mega-kilo);

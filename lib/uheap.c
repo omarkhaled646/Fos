@@ -21,8 +21,9 @@ struct Block
 	struct Block *ptrNext, *ptrPrev;
 };
 
-struct Block head = {USER_HEAP_START, USER_HEAP_MAX, NULL, NULL};
-struct Block *freeBlockListHead = &head;
+struct Block freeHead = {USER_HEAP_START, USER_HEAP_MAX, NULL, NULL};
+struct Block *freeBlockListHead = &freeHead;
+struct Block *allocatedBlockListHead = NULL;
 
 void* malloc(uint32 size)
 {
@@ -41,7 +42,7 @@ void* malloc(uint32 size)
 
 	while (block != NULL)
 	{
-		uint32 blockSize = block->endAddress - block->startAddress + 1;
+		uint32 blockSize = block->endAddress - block->startAddress;
 		if (blockSize >= size && blockSize < minSize)
 		{
 			minSize = blockSize;
@@ -53,11 +54,23 @@ void* malloc(uint32 size)
 	if (bestFitBlock == NULL)
 		return NULL;
 
+//	cprintf("start Address = %x \n", (void*)bestFitBlock->startAddress);
+
 	sys_allocateMem(bestFitBlock->startAddress, size);
-	uint32 bestFitBlockSize = bestFitBlock->endAddress - bestFitBlock->startAddress + 1;
+
+	uint32 bestFitBlockSize = bestFitBlock->endAddress - bestFitBlock->startAddress;
 	uint32 retAddress = bestFitBlock->startAddress;
 	uint32 numOfPages = (size + 4095) / 4096;
 	uint32 pagesSize = numOfPages * PAGE_SIZE;
+
+	struct Block allocatedBlock = {bestFitBlock->startAddress, bestFitBlock->startAddress + pagesSize,
+									allocatedBlockListHead, NULL};
+
+	allocatedBlockListHead = &allocatedBlock;
+	if (allocatedBlockListHead->ptrNext != NULL)
+	{
+		allocatedBlockListHead->ptrNext->ptrPrev = allocatedBlockListHead;
+	}
 
 	if (bestFitBlockSize == size)
 	{
@@ -97,11 +110,91 @@ void free(void* virtual_address)
 {
 	//TODO: [PROJECT 2021 - [2] User Heap] free() [User Side]
 	// Write your code here, remove the panic and write your code
-	panic("free() is not implemented yet...!!");
+	// panic("free() is not implemented yet...!!");
 
 	//you should get the size of the given allocation using its address
 
 	//refer to the project presentation and documentation for details
+
+	struct Block *block = allocatedBlockListHead;
+	struct Block *allocatedBlock = NULL;
+
+	while (block != NULL)
+	{
+		if ((void*)block->startAddress == virtual_address)
+		{
+			allocatedBlock = block;
+			break;
+		}
+		block = block->ptrNext;
+	}
+
+	if (allocatedBlock != NULL){
+
+		if (allocatedBlock->ptrNext != NULL)
+		{
+			allocatedBlock->ptrNext->ptrPrev = allocatedBlock->ptrPrev;
+		}
+
+		if (allocatedBlock->ptrPrev != NULL)
+		{
+			allocatedBlock->ptrPrev->ptrNext = allocatedBlock->ptrNext;
+		}
+		else
+		{
+			allocatedBlockListHead = allocatedBlock->ptrNext;
+		}
+
+		uint32 size = allocatedBlock->endAddress - allocatedBlock->startAddress;
+		sys_freeMem((uint32)virtual_address, size);
+
+		uint32 state = 0;
+		struct Block *matchedBlock = NULL;
+		block = freeBlockListHead;
+
+		while (block != NULL)
+		{
+			if (block->endAddress > allocatedBlock->startAddress)
+				break;
+			matchedBlock = block;
+			block = block->ptrNext;
+		}
+
+		if (matchedBlock->endAddress == allocatedBlock->startAddress)
+			state = 1;
+		if (matchedBlock->ptrNext != NULL && matchedBlock->ptrNext->startAddress == allocatedBlock->endAddress)
+		{
+			if (state == 1) state = 3;
+			else state = 2;
+		}
+
+		if (state == 1)
+		{
+			matchedBlock->endAddress = allocatedBlock->endAddress;
+		}
+		else if (state == 2)
+		{
+			matchedBlock = matchedBlock->ptrNext;
+			matchedBlock->startAddress = allocatedBlock->startAddress;
+		}
+		else if (state == 3)
+		{
+			matchedBlock->endAddress = matchedBlock->ptrNext->endAddress;
+			matchedBlock->ptrNext = matchedBlock->ptrNext->ptrNext;
+			if (matchedBlock->ptrNext->ptrNext != NULL)
+			{
+				matchedBlock->ptrNext->ptrNext->ptrPrev = matchedBlock;
+			}
+		}
+		else
+		{
+			struct Block *nextBlock = matchedBlock->ptrNext;
+			matchedBlock->ptrNext = allocatedBlock;
+			allocatedBlock->ptrPrev = matchedBlock;
+			allocatedBlock->ptrNext = nextBlock;
+			nextBlock->ptrPrev = allocatedBlock;
+		}
+	}
 }
 
 //==================================================================================//
