@@ -156,11 +156,11 @@ void _main(void)
 		//if ((freeFrames - sys_calculate_free_frames()) != 0) panic("Wrong allocation: ");
 		byteArr3 = (char*)ptr_allocations[5];
 
-	//	cprintf("50 % \n");
+//		cprintf(" %x \n", toAccess);
 
 		for(int i = 0; i < toAccess; i++)
 		{
-	//		cprintf("70 % \n");
+		//	cprintf("%x \n", byteArr3);
 			*byteArr3 = '@';
 			byteArr3 += PAGE_SIZE;
 		}
