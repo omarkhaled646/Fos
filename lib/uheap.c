@@ -17,83 +17,48 @@
 //==================================================================================//
 struct Block
 {
-	uint32 startAddress, endAddress;
-	struct Block *ptrNext, *ptrPrev;
-};
+	void* startAddress;
+	uint32 size;
+	uint32 numberOfPages;
+}allocatedBlocks[131072];
 
-struct Block freeHead = {USER_HEAP_START, USER_HEAP_MAX, NULL, NULL};
-struct Block *freeBlockListHead = &freeHead;
-struct Block *allocatedBlockListHead = NULL;
+struct Block freeBlocks[131072] = {{(void*)USER_HEAP_START, USER_HEAP_MAX - USER_HEAP_START, (USER_HEAP_MAX - USER_HEAP_START) / PAGE_SIZE}};
+uint32 allocatedIdx = 0, freeIdx = 1;
+
 
 void* malloc(uint32 size)
 {
-	//TODO: [PROJECT 2021 - [2] User Heap] malloc() [User Side]
-	// Write your code here, remove the panic and write your code
-	// panic("malloc() is not implemented yet...!!");
-
-	//This function should find the space of the required range
-	//using the BEST FIT strategy
-
-	//refer to the project presentation and documentation for details
-
+	// TODO: [PROJECT 2021 - [2] User Heap] malloc() [User Side]
 	uint32 minSize = USER_HEAP_MAX - USER_HEAP_START + 5;
-	struct Block *bestFitBlock = NULL;
-	struct Block *block = freeBlockListHead;
+	uint32 tempIdx = -1;
 
-	while (block != NULL)
+	for (int i = 0; i < freeIdx; i++)
 	{
-		uint32 blockSize = block->endAddress - block->startAddress;
-		if (blockSize >= size && blockSize < minSize)
+		if (size <= freeBlocks[i].size && freeBlocks[i].size < minSize)
 		{
-			minSize = blockSize;
-			bestFitBlock = block;
-		}
-		block = block->ptrNext;
-	}
-
-	if (bestFitBlock == NULL)
-		return NULL;
-
-//	cprintf("start Address = %x \n", (void*)bestFitBlock->startAddress);
-
-	sys_allocateMem(bestFitBlock->startAddress, size);
-
-	uint32 bestFitBlockSize = bestFitBlock->endAddress - bestFitBlock->startAddress;
-	uint32 retAddress = bestFitBlock->startAddress;
-	uint32 numOfPages = (size + 4095) / 4096;
-	uint32 pagesSize = numOfPages * PAGE_SIZE;
-
-	struct Block allocatedBlock = {bestFitBlock->startAddress, bestFitBlock->startAddress + pagesSize,
-									allocatedBlockListHead, NULL};
-
-	allocatedBlockListHead = &allocatedBlock;
-	if (allocatedBlockListHead->ptrNext != NULL)
-	{
-		allocatedBlockListHead->ptrNext->ptrPrev = allocatedBlockListHead;
-	}
-
-	if (bestFitBlockSize == size)
-	{
-		if (bestFitBlock->ptrNext != NULL)
-		{
-			bestFitBlock->ptrNext->ptrPrev = bestFitBlock->ptrPrev;
-		}
-
-		if (bestFitBlock->ptrPrev != NULL)
-		{
-			bestFitBlock->ptrPrev->ptrNext = bestFitBlock->ptrNext;
-		}
-		else
-		{
-			freeBlockListHead = bestFitBlock->ptrNext;
+			minSize = freeBlocks[i].size;
+			tempIdx = i;
 		}
 	}
-	else
-	{
-		bestFitBlock->startAddress += pagesSize;
-	}
 
-	return (void*) retAddress;
+	size = ROUNDUP(size, PAGE_SIZE);
+	uint32 numberOfPages = size / PAGE_SIZE;
+
+	if (tempIdx != -1)
+	{
+		allocatedBlocks[allocatedIdx].startAddress = freeBlocks[tempIdx].startAddress;
+		allocatedBlocks[allocatedIdx].size = size;
+		allocatedBlocks[allocatedIdx].numberOfPages = numberOfPages;
+
+		freeBlocks[tempIdx].size -= size;
+		freeBlocks[tempIdx].numberOfPages -= numberOfPages;
+		freeBlocks[tempIdx].startAddress = freeBlocks[tempIdx].startAddress + size;
+
+		sys_allocateMem((uint32)allocatedBlocks[allocatedIdx].startAddress, size);
+		allocatedIdx++;
+		return allocatedBlocks[allocatedIdx - 1].startAddress;
+	}
+	return NULL;
 }
 
 // free():
@@ -109,90 +74,38 @@ void* malloc(uint32 size)
 void free(void* virtual_address)
 {
 	//TODO: [PROJECT 2021 - [2] User Heap] free() [User Side]
-	// Write your code here, remove the panic and write your code
-	// panic("free() is not implemented yet...!!");
 
-	//you should get the size of the given allocation using its address
-
-	//refer to the project presentation and documentation for details
-
-	struct Block *block = allocatedBlockListHead;
-	struct Block *allocatedBlock = NULL;
-
-	while (block != NULL)
+	for (int i = 0; i < allocatedIdx; i++)
 	{
-		if ((void*)block->startAddress == virtual_address)
+		if (virtual_address == allocatedBlocks[i].startAddress && allocatedBlocks[i].size != 0)
 		{
-			allocatedBlock = block;
-			break;
+			sys_freeMem((uint32)virtual_address, allocatedBlocks[i].size);
+			for (int j = 0; j < freeIdx; j++)
+			{
+				if (virtual_address < freeBlocks[j].startAddress)
+				{
+					for (int k = freeIdx; k > j; k--)
+					{
+						freeBlocks[k] = freeBlocks[k - 1];
+					}
+					freeBlocks[j] = allocatedBlocks[i];
+					break;
+				}
+			}
+			allocatedBlocks[i].size = 0;
+			allocatedBlocks[i].numberOfPages = 0;
+			freeIdx++;
 		}
-		block = block->ptrNext;
 	}
 
-	if (allocatedBlock != NULL){
-
-		if (allocatedBlock->ptrNext != NULL)
+	for (int i = 0; i < freeIdx - 2; i++)
+	{
+		if(freeBlocks[i].startAddress + freeBlocks[i].size == freeBlocks[i + 1].startAddress)
 		{
-			allocatedBlock->ptrNext->ptrPrev = allocatedBlock->ptrPrev;
-		}
-
-		if (allocatedBlock->ptrPrev != NULL)
-		{
-			allocatedBlock->ptrPrev->ptrNext = allocatedBlock->ptrNext;
-		}
-		else
-		{
-			allocatedBlockListHead = allocatedBlock->ptrNext;
-		}
-
-		uint32 size = allocatedBlock->endAddress - allocatedBlock->startAddress;
-		sys_freeMem((uint32)virtual_address, size);
-
-		uint32 state = 0;
-		struct Block *matchedBlock = NULL;
-		block = freeBlockListHead;
-
-		while (block != NULL)
-		{
-			if (block->endAddress > allocatedBlock->startAddress)
-				break;
-			matchedBlock = block;
-			block = block->ptrNext;
-		}
-
-		if (matchedBlock->endAddress == allocatedBlock->startAddress)
-			state = 1;
-		if (matchedBlock->ptrNext != NULL && matchedBlock->ptrNext->startAddress == allocatedBlock->endAddress)
-		{
-			if (state == 1) state = 3;
-			else state = 2;
-		}
-
-		if (state == 1)
-		{
-			matchedBlock->endAddress = allocatedBlock->endAddress;
-		}
-		else if (state == 2)
-		{
-			matchedBlock = matchedBlock->ptrNext;
-			matchedBlock->startAddress = allocatedBlock->startAddress;
-		}
-		else if (state == 3)
-		{
-			matchedBlock->endAddress = matchedBlock->ptrNext->endAddress;
-			matchedBlock->ptrNext = matchedBlock->ptrNext->ptrNext;
-			if (matchedBlock->ptrNext->ptrNext != NULL)
-			{
-				matchedBlock->ptrNext->ptrNext->ptrPrev = matchedBlock;
-			}
-		}
-		else
-		{
-			struct Block *nextBlock = matchedBlock->ptrNext;
-			matchedBlock->ptrNext = allocatedBlock;
-			allocatedBlock->ptrPrev = matchedBlock;
-			allocatedBlock->ptrNext = nextBlock;
-			nextBlock->ptrPrev = allocatedBlock;
+			freeBlocks[i].size += freeBlocks[i + 1].size;
+			freeBlocks[i].numberOfPages += freeBlocks[i + 1].numberOfPages;
+			freeBlocks[i + 1].size = 0;
+			freeBlocks[i + 1].numberOfPages = 0;
 		}
 	}
 }

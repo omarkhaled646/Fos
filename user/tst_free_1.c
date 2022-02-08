@@ -230,6 +230,7 @@ void _main(void)
 //			if(ROUNDDOWN(myEnv->__uptr_pws[var].virtual_address,PAGE_SIZE) == ROUNDDOWN((uint32)(&(byteArr2[lastIndexOfByte2])), PAGE_SIZE))
 //				panic("free: page is not removed from WS");
 //		}
+
 		tmp_addresses[0] = (uint32)(&(byteArr2[0]));
 		tmp_addresses[1] = (uint32)(&(byteArr2[lastIndexOfByte2/2]));
 		tmp_addresses[2] = (uint32)(&(byteArr2[lastIndexOfByte2]));
